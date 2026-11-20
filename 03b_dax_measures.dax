@@ -1,0 +1,132 @@
+// =====================================================================
+// OLA PROJECT - STEP 3b: DAX MEASURES
+// Table name assumed: ola_rides
+// Create a blank table called "_Measures" (Enter Data -> empty) and add each
+// measure to it (Modeling > New measure) so they stay organised.
+// =====================================================================
+
+// ------------------------ PAGE 1: OVERALL ----------------------------
+Total Bookings = COUNTROWS ( ola_rides )
+
+Successful Bookings = SUM ( ola_rides[is_success] )
+
+Success Rate % = DIVIDE ( [Successful Bookings], [Total Bookings] )
+
+Failed Bookings = [Total Bookings] - [Successful Bookings]
+
+Failure Rate % = DIVIDE ( [Failed Bookings], [Total Bookings] )
+
+Total Revenue = SUM ( ola_rides[success_booking_value] )
+
+Avg Booking Value = DIVIDE ( [Total Revenue], [Successful Bookings] )
+
+Avg Ride Distance = AVERAGE ( ola_rides[ride_distance] )
+
+// Time intelligence (needs a DimDate table related to ola_rides[date])
+Revenue MoM % =
+VAR _prev = CALCULATE ( [Total Revenue], DATEADD ( DimDate[Date], -1, MONTH ) )
+RETURN DIVIDE ( [Total Revenue] - _prev, _prev )
+
+Bookings Prev Month = CALCULATE ( [Total Bookings], DATEADD ( DimDate[Date], -1, MONTH ) )
+
+Revenue YTD = TOTALYTD ( [Total Revenue], DimDate[Date] )
+
+// ------------------------ PAGE 2: VEHICLE TYPE -----------------------
+// Exact columns on your slide table:
+Total Booking Value = SUM ( ola_rides[booking_value] )
+
+Success Booking Value = SUM ( ola_rides[success_booking_value] )
+
+Avg Distance Travelled = AVERAGE ( ola_rides[ride_distance] )
+
+Total Distance Travelled = SUM ( ola_rides[ride_distance] )
+
+Revenue per KM = DIVIDE ( [Success Booking Value], [Total Distance Travelled] )
+
+Avg Vehicle TAT (min) = AVERAGE ( ola_rides[v_tat] )
+
+Revenue Share % =
+DIVIDE ( [Total Revenue], CALCULATE ( [Total Revenue], ALL ( ola_rides[vehicle_type] ) ) )
+
+Vehicle Revenue Rank = RANKX ( ALL ( ola_rides[vehicle_type] ), [Total Revenue], , DESC, DENSE )
+
+// ------------------------ PAGE 3: REVENUE ----------------------------
+Revenue by Payment Share % =
+DIVIDE ( [Total Revenue], CALCULATE ( [Total Revenue], ALL ( ola_rides[payment_method] ) ) )
+
+Avg Fare per KM = DIVIDE ( SUM ( ola_rides[success_booking_value] ), SUM ( ola_rides[ride_distance] ) )
+
+Customers = DISTINCTCOUNT ( ola_rides[customer_id] )
+
+Revenue per Customer = DIVIDE ( [Total Revenue], [Customers] )
+
+Avg Fare by Vehicle (Est) = DIVIDE ( [Total Revenue], [Successful Bookings] )
+
+Est Revenue Lost =
+SUMX (
+    VALUES ( ola_rides[vehicle_type] ),
+    VAR _fails = CALCULATE ( [Failed Bookings] )
+    VAR _fare = CALCULATE ( [Avg Booking Value] )
+    RETURN _fails * _fare
+)
+
+// ------------------------ PAGE 4: CANCELLATION -----------------------
+Cancelled by Customer = SUM ( ola_rides[is_cancel_customer] )
+
+Cancelled by Driver = SUM ( ola_rides[is_cancel_driver] )
+
+Driver Not Found = SUM ( ola_rides[is_driver_not_found] )
+
+Total Cancellations = [Cancelled by Customer] + [Cancelled by Driver]
+
+Customer Cancel % = DIVIDE ( [Cancelled by Customer], [Total Bookings] )
+
+Driver Cancel % = DIVIDE ( [Cancelled by Driver], [Total Bookings] )
+
+No Driver Found % = DIVIDE ( [Driver Not Found], [Total Bookings] )
+
+Cancellation Rate % = DIVIDE ( [Total Cancellations], [Total Bookings] )
+
+Incomplete Rides = SUM ( ola_rides[incomplete_ride] )
+
+// Share of a reason within all cancellations (use in a bar chart of cancel_reason)
+Reason Share % =
+DIVIDE (
+    [Total Cancellations],
+    CALCULATE ( [Total Cancellations], ALL ( ola_rides[cancel_reason] ) )
+)
+
+// ------------------------ PAGE 5: RATINGS ----------------------------
+Avg Driver Rating = AVERAGE ( ola_rides[driver_rating] )
+
+Avg Customer Rating = AVERAGE ( ola_rides[customer_rating] )
+
+Rated Rides = COUNTROWS ( FILTER ( ola_rides, NOT ISBLANK ( ola_rides[driver_rating] ) ) )
+
+Low Driver Rating % =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( ola_rides ), ola_rides[driver_rating] <= 2 ),
+    [Rated Rides]
+)
+
+High Driver Rating % =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( ola_rides ), ola_rides[driver_rating] >= 4.5 ),
+    [Rated Rides]
+)
+
+Rating Gap (Driver - Customer) = [Avg Driver Rating] - [Avg Customer Rating]
+
+// ------------------------ FORMATTING HELPERS -------------------------
+// Dynamic title for visuals that respond to slicers
+Vehicle Title =
+"Performance: " & IF ( ISFILTERED ( ola_rides[vehicle_type] ),
+                       CONCATENATEX ( VALUES ( ola_rides[vehicle_type] ), ola_rides[vehicle_type], ", " ),
+                       "All Vehicle Types" )
+
+// Conditional-format colour for success rate (use in "Field value" formatting)
+Success Rate Color =
+SWITCH ( TRUE (),
+    [Success Rate %] >= 0.70, "#2E7D32",
+    [Success Rate %] >= 0.55, "#F9A825",
+    "#C62828" )
